@@ -113,13 +113,18 @@ def render(data: dict):
                 match = metadata[metadata["Product"] == p]
                 lc = match["Lifecycle"].values[0] if len(match) > 0 else "Unknown"
                 color = LIFECYCLE_COLORS.get(lc, "#888")
+                short_name = p[:22] + "…" if len(p) > 22 else p
                 badge_parts.append(
-                    f"<span style='font-size:0.85rem'><b>{p[:20]}</b>: "
-                    f"<span style='color:{color}; font-weight:600;'>{lc}</span></span>"
+                    f'<span style="display:inline-block; background:rgba(0,0,0,0.03); '
+                    f'border:1px solid rgba(0,0,0,0.08); border-radius:8px; '
+                    f'padding:4px 10px; margin:3px; font-size:0.78rem; white-space:nowrap;">'
+                    f'<b>{short_name}</b>: '
+                    f'<span style="color:{color}; font-weight:600;">{lc}</span></span>'
                 )
-            badge_html = " &nbsp; ".join(badge_parts)
+            badge_html = "".join(badge_parts)
             st.markdown(
-                f"<div style='text-align:center; margin-bottom:1rem;'>{badge_html}</div>",
+                f'<div style="text-align:center; margin-bottom:1rem; display:flex; '
+                f'flex-wrap:wrap; justify-content:center; gap:4px;">{badge_html}</div>',
                 unsafe_allow_html=True,
             )
 

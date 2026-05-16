@@ -370,6 +370,127 @@ def load_product_metadata() -> pd.DataFrame:
     return df
 
 
+# ─── 8. ML FEATURE ENGINEERING ───────────────────────────────
+@st.cache_data(show_spinner="Building ML features…")
+def build_ml_features() -> pd.DataFrame:
+    """
+    Build a feature DataFrame from historical bookings for ML model training.
+
+    For each product-quarter combination (where enough history exists), creates:
+        lag_1 .. lag_4   — units from the prior 1–4 quarters
+        rolling_avg_4    — mean of last 4 quarters
+        rolling_std_4    — std  of last 4 quarters
+        qoq_growth       — quarter-over-quarter growth rate
+        yoy_growth        — year-over-year growth rate (lag_4 → current)
+        quarter_num      — 1-4 for seasonality encoding
+        product_encoded  — label-encoded product name
+        target           — actual units for the row's quarter
+
+    Returns:
+        pd.DataFrame with columns:
+            Product, Quarter, lag_1..lag_4, rolling_avg_4, rolling_std_4,
+            qoq_growth, yoy_growth, quarter_num, product_encoded, target
+    """
+    bookings = load_bookings_actuals()          # Product × 12 quarter columns
+    quarter_cols = [c for c in bookings.columns if c != "Product"]
+    products = bookings["Product"].tolist()
+
+    # Label-encode products (stable alphabetical order)
+    sorted_products = sorted(products)
+    product_label_map = {p: idx for idx, p in enumerate(sorted_products)}
+
+    # Quarter number extraction helper  (e.g. "FY25 Q3" → 3)
+    def _quarter_num(q: str) -> int:
+        try:
+            return int(q.strip()[-1])
+        except (ValueError, IndexError):
+            return 0
+
+    records = []
+    for _, row in bookings.iterrows():
+        product = row["Product"]
+        vals = [row[q] for q in quarter_cols]          # ordered time-series
+
+        for i in range(4, len(vals)):                   # need 4 lags minimum
+            target = vals[i]
+            lag_1 = vals[i - 1]
+            lag_2 = vals[i - 2]
+            lag_3 = vals[i - 3]
+            lag_4 = vals[i - 4]
+
+            window = vals[i - 4 : i]
+            rolling_avg = np.mean(window)
+            rolling_std = np.std(window, ddof=0)        # population std
+
+            qoq = (lag_1 - lag_2) / lag_2 if lag_2 != 0 else 0.0
+            yoy = (lag_1 - lag_4) / lag_4 if lag_4 != 0 else 0.0
+
+            records.append({
+                "Product":        product,
+                "Quarter":        quarter_cols[i],
+                "lag_1":          lag_1,
+                "lag_2":          lag_2,
+                "lag_3":          lag_3,
+                "lag_4":          lag_4,
+                "rolling_avg_4":  rolling_avg,
+                "rolling_std_4":  rolling_std,
+                "qoq_growth":     qoq,
+                "yoy_growth":     yoy,
+                "quarter_num":    _quarter_num(quarter_cols[i]),
+                "product_encoded": product_label_map[product],
+                "target":         target,
+            })
+
+    return pd.DataFrame(records)
+
+
+@st.cache_data(show_spinner="Building FY26 Q2 prediction features…")
+def build_prediction_features() -> pd.DataFrame:
+    """
+    Build the feature row for each product to predict FY26 Q2.
+    Uses FY25 Q2 .. FY26 Q1 (the last 4 known quarters) as lags.
+    """
+    bookings = load_bookings_actuals()
+    quarter_cols = [c for c in bookings.columns if c != "Product"]
+    products = bookings["Product"].tolist()
+    sorted_products = sorted(products)
+    product_label_map = {p: idx for idx, p in enumerate(sorted_products)}
+
+    records = []
+    for _, row in bookings.iterrows():
+        product = row["Product"]
+        vals = [row[q] for q in quarter_cols]
+
+        # Last 4 quarters are lags for predicting the next one (FY26 Q2)
+        lag_1 = vals[-1]   # FY26 Q1
+        lag_2 = vals[-2]   # FY25 Q4
+        lag_3 = vals[-3]   # FY25 Q3
+        lag_4 = vals[-4]   # FY25 Q2
+
+        window = vals[-4:]
+        rolling_avg = np.mean(window)
+        rolling_std = np.std(window, ddof=0)
+        qoq = (lag_1 - lag_2) / lag_2 if lag_2 != 0 else 0.0
+        yoy = (lag_1 - lag_4) / lag_4 if lag_4 != 0 else 0.0
+
+        records.append({
+            "Product":         product,
+            "Quarter":         "FY26 Q2",
+            "lag_1":           lag_1,
+            "lag_2":           lag_2,
+            "lag_3":           lag_3,
+            "lag_4":           lag_4,
+            "rolling_avg_4":   rolling_avg,
+            "rolling_std_4":   rolling_std,
+            "qoq_growth":      qoq,
+            "yoy_growth":      yoy,
+            "quarter_num":     2,                      # Q2
+            "product_encoded": product_label_map[product],
+        })
+
+    return pd.DataFrame(records)
+
+
 # ─── CONVENIENCE: Load all data at once ─────────────────────
 @st.cache_data(show_spinner="Loading all dashboard data…")
 def load_all_data() -> dict:

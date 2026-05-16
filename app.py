@@ -253,8 +253,8 @@ with st.sidebar:
 
     page = option_menu(
         menu_title=None,
-        options=["Overview", "Forecast Accuracy", "Segment Analysis", "Vertical Analysis", "Big Deal Intelligence", "AI Report Generator"],
-        icons=["bar-chart-fill", "bullseye", "buildings", "industry", "briefcase", "robot"],
+        options=["Overview", "Forecast Accuracy", "Segment Analysis", "Vertical Analysis", "Big Deal Intelligence", "AI Report Generator", "ML Forecasting"],
+        icons=["bar-chart-fill", "bullseye", "buildings", "industry", "briefcase", "robot", "cpu"],
         default_index=0,
         styles={
             "container": {"padding": "0!important", "background-color": "transparent"},
@@ -350,4 +350,8 @@ elif page == "Big Deal Intelligence":
 
 elif page == "AI Report Generator":
     from views.ai_report import render
+    render(data)
+
+elif page == "ML Forecasting":
+    from views.ml_forecast import render
     render(data)

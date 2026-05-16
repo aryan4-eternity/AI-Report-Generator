@@ -268,7 +268,33 @@ say so rather than making up numbers. Use markdown formatting for readability.""
         yield f"❌ Error: {str(e)}"
 
 
-# ─── 8. FULL DASHBOARD REPORT ───────────────────────────────
+# ─── 8. ML FORECAST ANALYSIS ───────────────────────────────
+def get_ml_forecast_analysis(ml_context: str):
+    """
+    Stream a 5-6 sentence analysis of ML forecasting results.
+    Called from the ML Forecasting page AI panel.
+
+    Args:
+        ml_context: Pre-formatted string with top 5 ML wins, top 5 ML losses,
+                    overall ML MAPE vs human MAPE, and top feature importances.
+    """
+    prompt = f"""You are analyzing XGBoost ML demand forecasting results for a networking hardware product portfolio.
+Based on the data below, write a concise 5-6 sentence analysis covering:
+1. Overall ML model performance vs human forecast teams
+2. Why certain products are predicted well or poorly by ML
+3. Which features drive the model most and what that means
+4. Whether ML should supplement or replace human forecasts for specific product types
+5. One actionable recommendation
+
+**ML Forecasting Results:**
+{ml_context}
+
+Be specific with product names, MAPE values, and feature names. Use a data-driven analytical tone."""
+
+    return _stream_llm(prompt, max_tokens=800)
+
+
+# ─── 9. FULL DASHBOARD REPORT ───────────────────────────────
 def generate_full_report(data_context: str):
     """
     Generate a comprehensive multi-section dashboard report. Returns a streaming generator.

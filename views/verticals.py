@@ -67,16 +67,25 @@ def render(data: dict):
     cross_agg = cross.groupby(["Vertical", "Product"])["Units"].sum().reset_index()
 
     if not cross_agg.empty:
+        # Truncate long product names for legend readability
+        cross_agg["Product_Short"] = cross_agg["Product"].apply(
+            lambda x: x[:22] + "…" if len(str(x)) > 22 else x
+        )
         fig_hbar = px.bar(
             cross_agg.sort_values("Units"),
             x="Units",
             y="Vertical",
-            color="Product",
+            color="Product_Short",
             orientation="h",
             barmode="stack",
             title="Top 8 Verticals by Top 5 Products (Total Units)",
+            labels={"Product_Short": "Product"},
         )
-        fig_hbar = _base_layout(fig_hbar, "Top 8 Verticals by Top 5 Products", 450)
+        fig_hbar.update_layout(
+            yaxis=dict(tickfont=dict(size=9)),
+            margin=dict(l=130, r=40, t=55, b=80),
+        )
+        fig_hbar = _base_layout(fig_hbar, "Top 8 Verticals by Top 5 Products", 470)
         st.plotly_chart(fig_hbar, width='stretch', key="vert_hbar")
 
     # ─── CHART 3: Line — Selected Vertical Trends ───────────
@@ -105,7 +114,8 @@ def render(data: dict):
             title=f"Quarterly Trend — {selected_product}",
         )
         fig_line.update_traces(line=dict(width=2.5), marker=dict(size=6))
-        fig_line = _base_layout(fig_line, f"Quarterly Trend — {selected_product}", 400)
+        fig_line.update_layout(xaxis=dict(tickangle=-30, tickfont=dict(size=10)))
+        fig_line = _base_layout(fig_line, f"Quarterly Trend — {selected_product}", 430)
         st.plotly_chart(fig_line, width='stretch', key="vert_line")
 
     # ─── AI INSIGHT ─────────────────────────────────────────

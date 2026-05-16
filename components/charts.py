@@ -22,17 +22,18 @@ def _base_layout(fig, title: str = "", height: int = 450):
         template=PLOTLY_TEMPLATE,
         font=PLOTLY_FONT,
         title=dict(text=title, font=dict(size=16, color="#1a1a2e")),
-        margin=PLOTLY_MARGIN,
+        margin=dict(l=50, r=40, t=55, b=100),
         height=height,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=-0.25,
+            yanchor="top",
+            y=-0.18,
             xanchor="center",
             x=0.5,
-            font=dict(size=11),
+            font=dict(size=10),
+            itemwidth=30,
         ),
     )
     return fig
@@ -47,16 +48,20 @@ def line_chart_multi_product(df: pd.DataFrame, products: list, quarter_col: str 
     Multi-line chart for product trends over quarters.
     df should be in long format: Product, Quarter, Units
     """
-    filtered = df[df[product_col].isin(products)]
+    filtered = df[df[product_col].isin(products)].copy()
+    # Truncate long product names for readable legends
+    filtered["_legend"] = filtered[product_col].apply(lambda x: x[:28] + "…" if len(str(x)) > 28 else x)
     fig = px.line(
         filtered,
         x=quarter_col,
         y=value_col,
-        color=product_col,
+        color="_legend",
         markers=True,
         title=title,
+        labels={"_legend": "Product"},
     )
     fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+    fig.update_layout(xaxis=dict(tickangle=-30, tickfont=dict(size=10)))
     return _base_layout(fig, title, height)
 
 
@@ -84,31 +89,38 @@ def horizontal_bar_lifecycle(df: pd.DataFrame, value_col: str, title: str = "Top
     Horizontal bar chart of top products, color-coded by lifecycle.
     df must have columns: Product, Lifecycle, and <value_col>.
     """
-    top = df.nlargest(top_n, value_col)
+    top = df.nlargest(top_n, value_col).copy()
+    # Truncate long product names for y-axis readability
+    top["Product_Short"] = top["Product"].apply(lambda x: x[:25] + "…" if len(str(x)) > 25 else x)
     fig = px.bar(
         top.sort_values(value_col),
         x=value_col,
-        y="Product",
+        y="Product_Short",
         orientation="h",
         color="Lifecycle",
         color_discrete_map=LIFECYCLE_COLORS,
         title=title,
+        labels={"Product_Short": "Product"},
     )
-    fig.update_layout(yaxis=dict(tickfont=dict(size=10)))
+    fig.update_layout(
+        yaxis=dict(tickfont=dict(size=9)),
+        margin=dict(l=160, r=40, t=55, b=80),
+    )
     return _base_layout(fig, title, height)
 
 
 def grouped_bar_accuracy(df: pd.DataFrame, quarter: str = "FY26 Q1",
                          title: str = "Forecast Accuracy by Team",
-                         height: int = 480) -> go.Figure:
+                         height: int = 520) -> go.Figure:
     """
     Grouped bar chart: x = products, bars = teams, y = accuracy.
     df in long format: Product, Team, Quarter, Accuracy
     """
     filtered = df[df["Quarter"] == quarter].copy()
-    # Abbreviate product names
-    filtered["Product_Short"] = filtered["Product"].apply(lambda x: x[:20] + "…" if len(x) > 20 else x)
-
+    # Abbreviate product names so they don't overlap on x-axis
+    filtered["Product_Short"] = filtered["Product"].apply(
+        lambda x: x[:15] + "…" if len(str(x)) > 15 else x
+    )
     fig = px.bar(
         filtered,
         x="Product_Short",
@@ -117,8 +129,12 @@ def grouped_bar_accuracy(df: pd.DataFrame, quarter: str = "FY26 Q1",
         barmode="group",
         color_discrete_map=TEAM_COLORS,
         title=title,
+        labels={"Product_Short": "Product"},
     )
-    fig.update_layout(xaxis=dict(tickangle=-45, tickfont=dict(size=9)))
+    fig.update_layout(
+        xaxis=dict(tickangle=-45, tickfont=dict(size=8)),
+        margin=dict(l=50, r=40, t=55, b=130),
+    )
     fig.update_yaxes(range=[0, 1])
     return _base_layout(fig, title, height)
 
@@ -137,6 +153,7 @@ def stacked_bar_segments(df: pd.DataFrame, product: str,
         color_discrete_map=SEGMENT_COLORS,
         title=title,
     )
+    fig.update_layout(xaxis=dict(tickangle=-30, tickfont=dict(size=10)))
     return _base_layout(fig, title, height)
 
 
@@ -158,6 +175,7 @@ def stacked_bar_100_pct(df: pd.DataFrame, product: str,
         color_discrete_map=SEGMENT_COLORS,
         title=title,
     )
+    fig.update_layout(xaxis=dict(tickangle=-30, tickfont=dict(size=10)))
     fig.update_yaxes(range=[0, 100], title="Share (%)")
     return _base_layout(fig, title, height)
 
@@ -191,34 +209,61 @@ def donut_chart(labels: list, values: list, colors: dict = None,
         values=values,
         hole=0.55,
         marker=dict(colors=color_list) if color_list else {},
-        textinfo="label+percent",
-        textposition="outside",
-        textfont=dict(size=11),
+        textinfo="percent",
+        textposition="inside",
+        textfont=dict(size=10, color="white"),
+        insidetextorientation="horizontal",
+        hoverinfo="label+percent+value",
     ))
+    fig.update_layout(
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=10),
+        ),
+        margin=dict(l=20, r=100, t=55, b=20),
+    )
     return _base_layout(fig, title, height)
 
 
 # ─── HEATMAP ─────────────────────────────────────────────────
 
 def bias_heatmap(df: pd.DataFrame, title: str = "Forecast Bias Heatmap",
-                 height: int = 600) -> go.Figure:
+                 height: int = 700) -> go.Figure:
     """
     Heatmap: rows = products, columns = team × quarter, values = bias.
     df in long format: Product, Team, Quarter, Bias
     """
-    # Create pivot: rows = Product, columns = "Team - Quarter"
     df_copy = df.copy()
-    df_copy["Team_Quarter"] = df_copy["Team"] + " — " + df_copy["Quarter"]
-    pivot = df_copy.pivot_table(index="Product", columns="Team_Quarter", values="Bias", aggfunc="first")
+    # Shorten column labels: "Demand Planners — FY26 Q1" → "DP FY26Q1"
+    team_abbrev = {
+        "Demand Planners":    "DP",
+        "Marketing Team":     "MKT",
+        "Data Science Team":  "DS",
+    }
+    df_copy["Team_Quarter"] = (
+        df_copy["Team"].map(team_abbrev).fillna(df_copy["Team"])
+        + " " + df_copy["Quarter"].str.replace(" ", "")
+    )
+    # Truncate product names on y-axis
+    df_copy["Product_Short"] = df_copy["Product"].apply(
+        lambda x: x[:22] + "…" if len(str(x)) > 22 else x
+    )
+    pivot = df_copy.pivot_table(
+        index="Product_Short", columns="Team_Quarter", values="Bias", aggfunc="first"
+    )
 
     fig = go.Figure(go.Heatmap(
         z=pivot.values,
         x=pivot.columns.tolist(),
         y=pivot.index.tolist(),
         colorscale=[
-            [0.0, "#E24B4A"],   # negative (under-forecast) = red
-            [0.5, "#FFFFFF"],   # center = white
-            [1.0, "#1D9E75"],   # positive (over-forecast) = green
+            [0.0, "#E24B4A"],
+            [0.5, "#FFFFFF"],
+            [1.0, "#1D9E75"],
         ],
         zmid=0,
         text=pivot.values.round(3),
@@ -227,8 +272,9 @@ def bias_heatmap(df: pd.DataFrame, title: str = "Forecast Bias Heatmap",
         colorbar=dict(title="Bias", tickformat=".2f"),
     ))
     fig.update_layout(
-        xaxis=dict(tickangle=-45, tickfont=dict(size=9)),
+        xaxis=dict(tickangle=-30, tickfont=dict(size=10)),
         yaxis=dict(tickfont=dict(size=9), autorange="reversed"),
+        margin=dict(l=190, r=60, t=55, b=80),
     )
     return _base_layout(fig, title, height)
 
@@ -306,16 +352,20 @@ def big_deal_pct_line(df: pd.DataFrame, products: list = None,
     if products:
         df_copy = df_copy[df_copy["Product"].isin(products)]
 
+    # Truncate long product names for readable legends
+    df_copy["_legend"] = df_copy["Product"].apply(lambda x: x[:25] + "…" if len(str(x)) > 25 else x)
     fig = px.line(
         df_copy,
         x="Quarter",
         y="Big_Deal_Pct",
-        color="Product",
+        color="_legend",
         markers=True,
         title=title,
+        labels={"_legend": "Product"},
     )
     fig.update_traces(line=dict(width=2), marker=dict(size=5))
     fig.update_yaxes(title="Big Deal %")
+    fig.update_layout(xaxis=dict(tickangle=-30, tickfont=dict(size=10)))
     return _base_layout(fig, title, height)
 
 
@@ -327,23 +377,29 @@ def big_deal_dependency_bar(df: pd.DataFrame, title: str = "Big Deal Dependency"
     agg["Total"] = agg["Big_Deals"] + agg["Avg_Deals"]
     agg["Big_Pct"] = (agg["Big_Deals"] / agg["Total"].replace(0, 1) * 100).round(1)
     agg = agg.sort_values("Big_Pct", ascending=True)
+    # Truncate long product names
+    agg["Product_Short"] = agg["Product"].apply(lambda x: x[:25] + "…" if len(str(x)) > 25 else x)
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        y=agg["Product"], x=agg["Big_Deals"], name="Big Deals",
+        y=agg["Product_Short"], x=agg["Big_Deals"], name="Big Deals",
         orientation="h", marker_color="#D85A30",
     ))
     fig.add_trace(go.Bar(
-        y=agg["Product"], x=agg["Avg_Deals"], name="Avg Deals",
+        y=agg["Product_Short"], x=agg["Avg_Deals"], name="Avg Deals",
         orientation="h", marker_color="#378ADD",
     ))
-    fig.update_layout(barmode="stack", yaxis=dict(tickfont=dict(size=9)))
+    fig.update_layout(
+        barmode="stack",
+        yaxis=dict(tickfont=dict(size=9)),
+        margin=dict(l=160, r=40, t=55, b=80),
+    )
 
     # Add threshold line at 15%
     for i, row in agg.iterrows():
         if row["Big_Pct"] > 15:
             fig.add_annotation(
-                x=row["Total"], y=row["Product"],
+                x=row["Total"], y=row["Product_Short"],
                 text=f"⚠️ {row['Big_Pct']:.0f}%",
                 showarrow=False, xanchor="left", font=dict(size=9, color="#E24B4A"),
             )
