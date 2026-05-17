@@ -1,6 +1,6 @@
 """
 CFL Sales Intelligence Dashboard — Main Entry Point
-Multi-page Streamlit + Plotly dashboard powered by Anthropic Claude API.
+Multi-page Streamlit + Plotly dashboard
 """
 
 import os
